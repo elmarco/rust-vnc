@@ -333,6 +333,7 @@ pub enum Encoding {
     Cursor,
     DesktopSize,
     // extensions
+    ExtendedKeyEvent,
 }
 
 impl Message for Encoding {
@@ -346,6 +347,7 @@ impl Message for Encoding {
             16 => Ok(Encoding::Zrle),
             -239 => Ok(Encoding::Cursor),
             -223 => Ok(Encoding::DesktopSize),
+            -258 => Ok(Encoding::ExtendedKeyEvent),
             n => Ok(Encoding::Unknown(n)),
         }
     }
@@ -359,6 +361,7 @@ impl Message for Encoding {
             Encoding::Zrle => 16,
             Encoding::Cursor => -239,
             Encoding::DesktopSize => -223,
+            Encoding::ExtendedKeyEvent => -258,
             Encoding::Unknown(n) => *n,
         };
         writer.write_i32::<BigEndian>(encoding)?;
@@ -389,6 +392,11 @@ pub enum C2S {
     },
     CutText(String),
     // extensions
+    ExtendedKeyEvent {
+        down: bool,
+        keysym: u32,
+        keycode: u32,
+    },
 }
 
 impl Message for C2S {
@@ -434,6 +442,22 @@ impl Message for C2S {
             6 => {
                 reader.read_exact(&mut [0u8; 3])?;
                 Ok(C2S::CutText(String::read_from(reader)?))
+            }
+            255 => {
+                let submessage_type = reader.read_u8()?;
+                match submessage_type {
+                    0 => {
+                        let down = reader.read_u16::<BigEndian>()? != 0;
+                        let keysym = reader.read_u32::<BigEndian>()?;
+                        let keycode = reader.read_u32::<BigEndian>()?;
+                        Ok(C2S::ExtendedKeyEvent {
+                            down,
+                            keysym,
+                            keycode,
+                        })
+                    }
+                    _ => Err(Error::Unexpected("server to client QEMU submessage type")),
+                }
             }
             _ => Err(Error::Unexpected("client to server message type")),
         }
@@ -485,6 +509,17 @@ impl Message for C2S {
             }
             C2S::CutText(ref text) => {
                 String::write_to(text, writer)?;
+            }
+            C2S::ExtendedKeyEvent {
+                down,
+                keysym,
+                keycode,
+            } => {
+                writer.write_u8(255)?;
+                writer.write_u8(0)?;
+                writer.write_u16::<BigEndian>(if *down { 1 } else { 0 })?;
+                writer.write_u32::<BigEndian>(*keysym)?;
+                writer.write_u32::<BigEndian>(*keycode)?;
             }
         }
         Ok(())
