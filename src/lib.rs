@@ -9,10 +9,12 @@ mod zrle;
 
 pub mod client;
 pub mod proxy;
+pub mod server;
 
 pub use client::Client;
 pub use protocol::{Colour, Encoding, PixelFormat};
 pub use proxy::Proxy;
+pub use server::Server;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct Rect {

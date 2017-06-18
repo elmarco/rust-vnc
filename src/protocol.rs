@@ -273,6 +273,24 @@ impl Message for PixelFormat {
     }
 }
 
+impl PixelFormat {
+    /// Creates RGB pixel format with 4 bytes per pixel and 3 bytes of depth.
+    pub fn rgb8888() -> Self {
+        Self {
+            bits_per_pixel: 32,
+            depth: 24,
+            big_endian: true,
+            true_colour: true,
+            red_max: 255,
+            green_max: 255,
+            blue_max: 255,
+            red_shift: 0,
+            green_shift: 8,
+            blue_shift: 16,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ServerInit {
     pub framebuffer_width: u16,
@@ -456,7 +474,7 @@ impl Message for C2S {
                             keycode,
                         })
                     }
-                    _ => Err(Error::Unexpected("server to client QEMU submessage type")),
+                    _ => Err(Error::Unexpected("client to server QEMU submessage type")),
                 }
             }
             _ => Err(Error::Unexpected("client to server message type")),
