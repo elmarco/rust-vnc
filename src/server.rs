@@ -282,10 +282,28 @@ impl<'a> Update<'a> {
     }
 }
 
+pub trait ServerMessage {
+    fn write_to<W: Write>(&self, writer: &mut W) -> Result<()>;
+}
+
 /// `FramebufferUpdate` message.
 pub struct FramebufferUpdate<'a> {
     validation_data: ValidationData,
     updates: Vec<Update<'a>>,
+}
+
+impl<'a> ServerMessage for FramebufferUpdate<'a> {
+    /// Serializes this structure and sends it using given `writer`.
+    fn write_to<W: Write>(&self, writer: &mut W) -> Result<()> {
+        for chunk in self.updates.chunks(u16::max_value() as usize) {
+            let count = chunk.len() as u16;
+            protocol::S2C::FramebufferUpdate { count }.write_to(writer)?;
+            for update in chunk {
+                update.write_to(writer)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 impl<'a> FramebufferUpdate<'a> {
@@ -379,18 +397,6 @@ impl<'a> FramebufferUpdate<'a> {
         update.check(&self.validation_data);
         self.updates.push(update);
         self
-    }
-
-    /// Serializes this structure and sends it using given `writer`.
-    pub fn write_to<W: Write>(&self, writer: &mut W) -> Result<()> {
-        for chunk in self.updates.chunks(u16::max_value() as usize) {
-            let count = chunk.len() as u16;
-            protocol::S2C::FramebufferUpdate { count }.write_to(writer)?;
-            for update in chunk {
-                update.write_to(writer)?;
-            }
-        }
-        Ok(())
     }
 }
 
@@ -492,40 +498,8 @@ impl Server {
         })
     }
 
-    /// Sends header of `FramebufferUpdate` message containing number of rectangles to be sent.
-    ///
-    /// Call to this method must be followed by `count` calls to `send_rectangle_header`.
-    pub fn send_framebuffer_update_header(&mut self, count: u16) -> Result<()> {
-        protocol::S2C::FramebufferUpdate { count }.write_to(&mut self.stream)
-    }
-
-    /// Sends rectangle header.
-    ///
-    /// The rectangle header must be followed by the pixel data in the specified encoding.
-    pub fn send_rectangle_header(
-        &mut self,
-        x: u16,
-        y: u16,
-        width: u16,
-        height: u16,
-        encoding: protocol::Encoding,
-    ) -> Result<()> {
-        protocol::Rectangle {
-            x_position: x,
-            y_position: y,
-            width,
-            height,
-            encoding,
-        }
-        .write_to(&mut self.stream)
-    }
-
-    /// Writes raw data to the socket.
-    ///
-    /// This method may be used to send pixel data following rectangle header sent by
-    /// `send_rectangle_header` method.
-    pub fn send_raw_data(&mut self, data: &[u8]) -> Result<()> {
-        Ok(self.stream.write_all(data)?)
+    pub fn send<M: ServerMessage>(&mut self, msg: &M) -> Result<()> {
+        msg.write_to(&mut self.stream)
     }
 
     /// Shuts down communication over TCP stream in both directions.
@@ -536,7 +510,7 @@ impl Server {
 
 #[cfg(test)]
 mod test {
-    use super::{protocol, FramebufferUpdate, Rect, Update, ValidationData};
+    use super::{protocol, FramebufferUpdate, Rect, ServerMessage, Update, ValidationData};
     use std::io::Cursor;
 
     /// Checks if `ValidationData` correctly converts bits per pixel from `PixelFormat` to bytes
