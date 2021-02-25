@@ -681,3 +681,47 @@ impl Message for S2C {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct Rect {
+    pub left: u16,
+    pub top: u16,
+    pub width: u16,
+    pub height: u16,
+}
+
+impl Rect {
+    /// Constructs new `Rect`.
+    pub fn new(left: u16, top: u16, width: u16, height: u16) -> Self {
+        Self {
+            left,
+            top,
+            width,
+            height,
+        }
+    }
+
+    /// Constructs new zero-sized `Rect` placed at (0, 0).
+    pub fn empty() -> Self {
+        Self::new(0, 0, 0, 0)
+    }
+}
+
+impl Message for Rect {
+    fn read_from<R: Read>(reader: &mut R) -> Result<Self> {
+        Ok(Self {
+            left: reader.read_u16::<BigEndian>()?,
+            top: reader.read_u16::<BigEndian>()?,
+            width: reader.read_u16::<BigEndian>()?,
+            height: reader.read_u16::<BigEndian>()?,
+        })
+    }
+
+    fn write_to<W: Write>(&self, writer: &mut W) -> Result<()> {
+        writer.write_u16::<BigEndian>(self.left)?;
+        writer.write_u16::<BigEndian>(self.top)?;
+        writer.write_u16::<BigEndian>(self.width)?;
+        writer.write_u16::<BigEndian>(self.height)?;
+        Ok(())
+    }
+}
