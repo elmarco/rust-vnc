@@ -2,9 +2,9 @@ use crate::protocol::{self, Message};
 use crate::{Rect, Result};
 
 use byteorder::{BigEndian, WriteBytesExt};
-use std::io::Write;
 use std::net::{Shutdown, TcpStream};
 use std::sync::Mutex;
+use std::{io::Write, sync::Arc};
 
 /// Definitions of events received by server from client.
 #[derive(Debug)]
@@ -402,10 +402,10 @@ impl<'a> FramebufferUpdate<'a> {
 }
 
 /// This structure provides basic server-side functionality of VNC protocol.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Server {
-    stream: Mutex<TcpStream>,
-    out_stream: Mutex<TcpStream>,
+    stream: Arc<Mutex<TcpStream>>,
+    out_stream: Arc<Mutex<TcpStream>>,
 }
 
 impl Server {
@@ -459,8 +459,8 @@ impl Server {
 
         Ok((
             Server {
-                stream: Mutex::new(stream),
-                out_stream: Mutex::new(out_stream),
+                stream: Arc::new(Mutex::new(stream)),
+                out_stream: Arc::new(Mutex::new(out_stream)),
             },
             client_init.shared,
         ))
@@ -509,7 +509,7 @@ impl Server {
     }
 
     pub fn send<M: ServerMessage>(&self, msg: &M) -> Result<()> {
-        let out_stream = &mut *self.stream.lock().unwrap();
+        let out_stream = &mut *self.out_stream.lock().unwrap();
         msg.write_to(out_stream)
     }
 
