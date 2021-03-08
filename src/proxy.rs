@@ -136,7 +136,7 @@ impl Proxy {
                     &protocol::Encoding::Raw
                     | &protocol::Encoding::CopyRect
                     | &protocol::Encoding::Zrle
-                    | &protocol::Encoding::Cursor
+                    | &protocol::Encoding::RichCursor
                     | &protocol::Encoding::DesktopSize => true,
                     encoding => {
                         warn!("encoding {:?} is not supported", encoding);
@@ -208,7 +208,7 @@ impl Proxy {
                                 debug!("c<-s ...ZRLE pixels");
                                 Vec::<u8>::write_to(&zrle, &mut buffer_stream)?;
                             }
-                            protocol::Encoding::Cursor => {
+                            protocol::Encoding::RichCursor => {
                                 let mut pixels = vec![
                                     0;
                                     (rectangle.width as usize)

@@ -137,7 +137,7 @@ impl Event {
                                     break;
                                 }
                             }
-                            protocol::Encoding::Cursor => {
+                            protocol::Encoding::RichCursor => {
                                 let mut pixels = vec![
                                     0;
                                     (rectangle.width as usize)

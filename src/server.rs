@@ -263,7 +263,7 @@ impl<'a> Update<'a> {
                 writer.write_u16::<BigEndian>(hotspot.1)?;
                 writer.write_u16::<BigEndian>(size.0)?;
                 writer.write_u16::<BigEndian>(size.1)?;
-                protocol::Encoding::Cursor.write_to(writer)?;
+                protocol::Encoding::RichCursor.write_to(writer)?;
                 writer.write_all(pixels)?;
                 writer.write_all(mask_bits)?;
             }
