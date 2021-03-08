@@ -4,6 +4,7 @@ use crate::{Rect, Result};
 use byteorder::{BigEndian, WriteBytesExt};
 use std::io::Write;
 use std::net::{Shutdown, TcpStream};
+use std::sync::Mutex;
 
 /// Definitions of events received by server from client.
 #[derive(Debug)]
@@ -403,7 +404,8 @@ impl<'a> FramebufferUpdate<'a> {
 /// This structure provides basic server-side functionality of VNC protocol.
 #[derive(Debug)]
 pub struct Server {
-    stream: TcpStream,
+    stream: Mutex<TcpStream>,
+    out_stream: Mutex<TcpStream>,
 }
 
 impl Server {
@@ -453,13 +455,21 @@ impl Server {
         };
 
         server_init.write_to(&mut stream)?;
+        let out_stream = stream.try_clone()?;
 
-        Ok((Server { stream }, client_init.shared))
+        Ok((
+            Server {
+                stream: Mutex::new(stream),
+                out_stream: Mutex::new(out_stream),
+            },
+            client_init.shared,
+        ))
     }
 
     /// Reads the socket and returns received event.
-    pub fn read_event(&mut self) -> Result<Event> {
-        protocol::C2S::read_from(&mut self.stream).map(|package| match package {
+    pub fn read_event(&self) -> Result<Event> {
+        let stream = &mut *self.stream.lock().unwrap();
+        protocol::C2S::read_from(stream).map(|package| match package {
             protocol::C2S::SetPixelFormat(pixel_format) => Event::SetPixelFormat(pixel_format),
             protocol::C2S::SetEncodings(encodings) => Event::SetEncodings(encodings),
             protocol::C2S::FramebufferUpdateRequest {
@@ -498,13 +508,15 @@ impl Server {
         })
     }
 
-    pub fn send<M: ServerMessage>(&mut self, msg: &M) -> Result<()> {
-        msg.write_to(&mut self.stream)
+    pub fn send<M: ServerMessage>(&self, msg: &M) -> Result<()> {
+        let out_stream = &mut *self.stream.lock().unwrap();
+        msg.write_to(out_stream)
     }
 
     /// Shuts down communication over TCP stream in both directions.
     pub fn disconnect(self) -> Result<()> {
-        Ok(self.stream.shutdown(Shutdown::Both)?)
+        let stream = &mut *self.stream.lock().unwrap();
+        Ok(stream.shutdown(Shutdown::Both)?)
     }
 }
 
