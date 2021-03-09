@@ -339,7 +339,7 @@ impl Message for CopyRect {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Encoding {
     Unknown(i32),
     // core spec
