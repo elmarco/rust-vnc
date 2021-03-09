@@ -2,7 +2,7 @@ use crate::protocol::{self, Message};
 use crate::{Rect, Result};
 
 use byteorder::{BigEndian, WriteBytesExt};
-use std::net::{Shutdown, TcpStream};
+use std::{convert::TryInto, net::{Shutdown, TcpStream}};
 use std::sync::Mutex;
 use std::{io::Write, sync::Arc};
 
@@ -99,6 +99,12 @@ pub enum Event {
         keysym: u32,
         keycode: u32,
     },
+
+    SetDesktopSize {
+        width: u16,
+        height: u16,
+        screens: Vec<protocol::Screen>,
+    }
 }
 
 /// Gathers all data needed to validate framebuffer updates.
@@ -144,6 +150,13 @@ enum Update<'a> {
     DesktopSize {
         width: u16,
         height: u16,
+    },
+    ExtendedDesktopSize {
+        x: u16,
+        y: u16,
+        width: u16,
+        height: u16,
+        screens: &'a [protocol::Screen],
     },
     Encoding {
         encoding: protocol::Encoding,
@@ -215,6 +228,7 @@ impl<'a> Update<'a> {
             } => {
                 // No check is needed
             }
+            Update::ExtendedDesktopSize { .. } => {}
             Update::Encoding { encoding: _ } => {
                 // No check is needed
             }
@@ -271,6 +285,18 @@ impl<'a> Update<'a> {
                 writer.write_u16::<BigEndian>(width)?;
                 writer.write_u16::<BigEndian>(height)?;
                 protocol::Encoding::DesktopSize.write_to(writer)?;
+            }
+            Update::ExtendedDesktopSize { x, y, width, height, screens } => {
+                writer.write_u16::<BigEndian>(x)?;
+                writer.write_u16::<BigEndian>(y)?;
+                writer.write_u16::<BigEndian>(width)?;
+                writer.write_u16::<BigEndian>(height)?;
+                protocol::Encoding::ExtendedDesktopSize.write_to(writer)?;
+                writer.write_u8(screens.len().try_into().unwrap())?;
+                writer.write_all(&[0; 3])?;
+                for s in screens {
+                    s.write_to(writer)?;
+                }
             }
             Update::Encoding { encoding } => {
                 Rect::empty().write_to(writer)?;
@@ -379,6 +405,16 @@ impl<'a> FramebufferUpdate<'a> {
     /// Adds notification about framebuffer resize.
     pub fn add_desktop_size(&mut self, width: u16, height: u16) -> &mut Self {
         let update = Update::DesktopSize { width, height };
+        update.check(&self.validation_data);
+        self.updates.push(update);
+        self
+    }
+
+    /// Adds notification about framebuffer resize.
+    pub fn add_extended_desktop_size(&mut self, x: u16, y: u16, width: u16, height: u16, screens: &'a [protocol::Screen]) -> &mut Self {
+        let update = Update::ExtendedDesktopSize {
+            x, y, width, height, screens,
+        };
         update.check(&self.validation_data);
         self.updates.push(update);
         self
@@ -496,6 +532,15 @@ impl Server {
                 down,
                 keysym,
                 keycode,
+            },
+            protocol::C2S::SetDesktopSize {
+                width,
+                height,
+                screens,
+            } => Event::SetDesktopSize {
+                width,
+                height,
+                screens,
             },
         })
     }

@@ -1,6 +1,6 @@
 use crate::{Error, Result};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use std::io::{ErrorKind as IoErrorKind, Read, Write};
+use std::{convert::TryInto, io::{ErrorKind as IoErrorKind, Read, Write}};
 
 pub trait Message {
     fn read_from<R: Read>(reader: &mut R) -> Result<Self>
@@ -498,6 +498,11 @@ pub enum C2S {
         y_position: u16,
     },
     CutText(String),
+    SetDesktopSize {
+        width: u16,
+        height: u16,
+        screens: Vec<Screen>,
+    },
     // extensions
     ExtendedKeyEvent {
         down: bool,
@@ -550,6 +555,23 @@ impl Message for C2S {
                 reader.read_exact(&mut [0u8; 3])?;
                 Ok(C2S::CutText(String::read_from(reader)?))
             }
+            251 => {
+                reader.read_exact(&mut [0u8; 1])?;
+                let width = reader.read_u16::<BigEndian>()?;
+                let height = reader.read_u16::<BigEndian>()?;
+                let nscreens = reader.read_u8()?;
+                reader.read_exact(&mut [0u8; 1])?;
+                let mut screens = Vec::new();
+                for _ in 0..nscreens {
+                    screens.push(Screen::read_from(reader)?);
+                }
+                Ok(C2S::SetDesktopSize {
+                    width,
+                    height,
+                    screens,
+                })
+
+            }
             255 => {
                 let submessage_type = reader.read_u8()?;
                 match submessage_type {
@@ -566,7 +588,10 @@ impl Message for C2S {
                     _ => Err(Error::Unexpected("client to server QEMU submessage type")),
                 }
             }
-            _ => Err(Error::Unexpected("client to server message type")),
+            msgtype => {
+                dbg!(msgtype);
+                Err(Error::Unexpected("client to server message type"))
+            }
         }
     }
     fn write_to<W: Write>(&self, writer: &mut W) -> Result<()> {
@@ -628,6 +653,20 @@ impl Message for C2S {
                 writer.write_u32::<BigEndian>(*keysym)?;
                 writer.write_u32::<BigEndian>(*keycode)?;
             }
+            C2S::SetDesktopSize {
+                width,
+                height,
+                screens,
+            } => {
+                writer.write_u8(251)?;
+                writer.write_u8(0)?;
+                writer.write_u16::<BigEndian>(*width)?;
+                writer.write_u16::<BigEndian>(*height)?;
+                writer.write_u8(screens.len().try_into().unwrap())?;
+                for s in screens {
+                    s.write_to(writer)?;
+                }
+            }
         }
         Ok(())
     }
@@ -683,6 +722,30 @@ impl Message for Colour {
         writer.write_u16::<BigEndian>(self.red)?;
         writer.write_u16::<BigEndian>(self.green)?;
         writer.write_u16::<BigEndian>(self.blue)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct Screen {
+    pub id: u32,
+    pub rect: Rect,
+    pub flags: u32,
+}
+
+impl Message for Screen {
+    fn read_from<R: Read>(reader: &mut R) -> Result<Self> {
+        Ok(Self {
+            id: reader.read_u32::<BigEndian>()?,
+            rect: Rect::read_from(reader)?,
+            flags: reader.read_u32::<BigEndian>()?,
+        })
+    }
+
+    fn write_to<W: Write>(&self, writer: &mut W) -> Result<()> {
+        writer.write_u32::<BigEndian>(self.id)?;
+        self.rect.write_to(writer)?;
+        writer.write_u32::<BigEndian>(self.flags)?;
         Ok(())
     }
 }
