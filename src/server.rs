@@ -109,15 +109,13 @@ struct ValidationData {
 
 impl ValidationData {
     /// Constructs new `ValidationData`.
-    fn new(pixel_format: &protocol::PixelFormat) -> Self {
-        let mut mine = ValidationData { bytes_per_pixel: 0 };
-        mine.update(pixel_format);
-        mine
-    }
-
-    /// Updates bytes per pixel from `PixelFormat`.
-    fn update(&mut self, pixel_format: &protocol::PixelFormat) {
-        self.bytes_per_pixel = (pixel_format.bits_per_pixel as u16 + 7) / 8;
+    fn new(pixel_format: Option<&protocol::PixelFormat>) -> Self {
+        let bytes_per_pixel = if let Some(pf) = pixel_format {
+            (pf.bits_per_pixel as u16 + 7) / 8
+        } else {
+            0
+        };
+        Self { bytes_per_pixel }
     }
 }
 
@@ -309,7 +307,7 @@ impl<'a> ServerMessage for FramebufferUpdate<'a> {
 
 impl<'a> FramebufferUpdate<'a> {
     /// Constructs new `FramebufferUpdate`.
-    pub fn new(pixel_format: &protocol::PixelFormat) -> Self {
+    pub fn new(pixel_format: Option<&protocol::PixelFormat>) -> Self {
         FramebufferUpdate {
             validation_data: ValidationData::new(pixel_format),
             updates: Vec::new(),
@@ -533,7 +531,7 @@ mod test {
         let test_data = vec![(8, 1), (23, 3), (24, 3), (25, 4), (31, 4), (32, 4), (33, 5)];
         for (bits, expected_bytes) in test_data {
             format.bits_per_pixel = bits;
-            let data = ValidationData::new(&format);
+            let data = ValidationData::new(Some(&format));
             assert_eq!(data.bytes_per_pixel, expected_bytes);
         }
     }
@@ -544,7 +542,7 @@ mod test {
     fn check_if_raw_update_accepts_valid_data() {
         let data = vec![0; 4 * 800 * 100];
         let pixel_format = protocol::PixelFormat::rgb8888();
-        let validation_data = ValidationData::new(&pixel_format);
+        let validation_data = ValidationData::new(Some(&pixel_format));
 
         // Small rectangle
         Update::Raw {
@@ -567,7 +565,7 @@ mod test {
     fn check_if_raw_update_rejects_invalid_data() {
         let data = vec![0; 5];
         let pixel_format = protocol::PixelFormat::rgb8888();
-        let validation_data = ValidationData::new(&pixel_format);
+        let validation_data = ValidationData::new(Some(&pixel_format));
 
         Update::Raw {
             rect: Rect::new(0, 0, 8, 8),
@@ -582,7 +580,7 @@ mod test {
     fn check_if_set_cursor_update_accepts_valid_data() {
         let data = vec![0; 4 * 800 * 100];
         let pixel_format = protocol::PixelFormat::rgb8888();
-        let validation_data = ValidationData::new(&pixel_format);
+        let validation_data = ValidationData::new(Some(&pixel_format));
 
         // Small rectangle
         Update::SetCursor {
@@ -609,7 +607,7 @@ mod test {
     fn check_if_set_cursor_update_rejects_invalid_pixel_data() {
         let data = vec![0; 15];
         let pixel_format = protocol::PixelFormat::rgb8888();
-        let validation_data = ValidationData::new(&pixel_format);
+        let validation_data = ValidationData::new(Some(&pixel_format));
 
         Update::SetCursor {
             size: (8, 8),
@@ -626,7 +624,7 @@ mod test {
     fn check_if_set_cursor_update_rejects_invalid_bit_mask_data() {
         let data = vec![0; 16];
         let pixel_format = protocol::PixelFormat::rgb8888();
-        let validation_data = ValidationData::new(&pixel_format);
+        let validation_data = ValidationData::new(Some(&pixel_format));
 
         Update::SetCursor {
             size: (8, 8),
@@ -639,7 +637,7 @@ mod test {
 
     #[test]
     fn framebuffer_update() {
-        let mut fbu = FramebufferUpdate::new(&protocol::PixelFormat::rgb8888());
+        let mut fbu = FramebufferUpdate::new(Some(&protocol::PixelFormat::rgb8888()));
         let pixel_data = vec![0; 8 * 8 * 4];
         let rect = Rect {
             left: 0,
