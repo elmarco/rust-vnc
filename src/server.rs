@@ -347,10 +347,7 @@ impl<'a> FramebufferUpdate<'a> {
     ///
     /// TODO: add method taking uncompressed data and compressing them.
     pub fn add_compressed_pixels(&mut self, rect: Rect, zlib_data: &'a [u8]) -> &mut Self {
-        let update = Update::Zrle {
-            rect: rect,
-            zlib_data: zlib_data,
-        };
+        let update = Update::Zrle { rect, zlib_data };
         update.check(&self.validation_data);
         self.updates.push(update);
         self
@@ -371,8 +368,8 @@ impl<'a> FramebufferUpdate<'a> {
         let update = Update::SetCursor {
             size: (width, height),
             hotspot: (hotspot_x, hotspot_y),
-            pixels: pixels,
-            mask_bits: mask_bits,
+            pixels,
+            mask_bits,
         };
         update.check(&self.validation_data);
         self.updates.push(update);
@@ -381,10 +378,7 @@ impl<'a> FramebufferUpdate<'a> {
 
     /// Adds notification about framebuffer resize.
     pub fn add_desktop_size(&mut self, width: u16, height: u16) -> &mut Self {
-        let update = Update::DesktopSize {
-            width: width,
-            height: height,
-        };
+        let update = Update::DesktopSize { width, height };
         update.check(&self.validation_data);
         self.updates.push(update);
         self
@@ -392,7 +386,7 @@ impl<'a> FramebufferUpdate<'a> {
 
     /// Adds confirmation of support of pseudo-encoding.
     pub fn add_pseudo_encoding(&mut self, encoding: protocol::Encoding) -> &mut Self {
-        let update = Update::Encoding { encoding: encoding };
+        let update = Update::Encoding { encoding };
         update.check(&self.validation_data);
         self.updates.push(update);
         self
